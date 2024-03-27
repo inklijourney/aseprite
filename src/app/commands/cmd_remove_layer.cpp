@@ -139,7 +139,7 @@ void RemoveLayerCommand::onExecute(Context* context)
   Doc* document(writer.document());
   Sprite* sprite(writer.sprite());
   {
-    Tx tx(writer.context(), "Remove Layer");
+    Tx tx(writer, "Remove Layer");
     DocApi api = document->getApi(tx);
     // We need to remove all the tilesets after the tilemaps are deleted
     // and in descending tileset index order, otherwise the tileset indexes
@@ -172,11 +172,17 @@ void RemoveLayerCommand::onExecute(Context* context)
       }
     }
     else {
-      if (deleting_all_layers(context, sprite, 1)) {
+      Layer* layer = writer.layer();
+      layer_t deletedTopLevelLayers = 0;
+
+      if (layer->parent() == sprite->root()) {
+        ++deletedTopLevelLayers;
+      }
+
+      if (deleting_all_layers(context, sprite, deletedTopLevelLayers)) {
         return;
       }
 
-      Layer* layer = writer.layer();
       if (layer->isTilemap() && !continue_deleting_unused_tilesets(context, sprite, {layer}, tsiToDelete)) {
         return;
       }

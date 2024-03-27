@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2018-2023  Igara Studio S.A.
+// Copyright (C) 2018-2024  Igara Studio S.A.
 // Copyright (C) 2018  David Capello
 //
 // This program is distributed under the terms of
@@ -413,6 +413,7 @@ int Dialog_show(lua_State* L)
       if (!rc.isEmpty()) {
         conn = dlg->window.Open.connect([dlg, rc]{
           dlg->setWindowBounds(rc);
+          dlg->window.setAutoRemap(false);
         });
       }
     }
@@ -669,7 +670,7 @@ int Dialog_separator(lua_State* L)
   }
 
   dlg->mainWidgets.push_back(widget);
-  dlg->grid.addChildInCell(widget, 2, 1, ui::HORIZONTAL | ui::TOP);
+  dlg->currentGrid->addChildInCell(widget, 2, 1, ui::HORIZONTAL | ui::TOP);
   dlg->hbox = nullptr;
 
   lua_pushvalue(L, 1);
@@ -1335,27 +1336,22 @@ int Dialog_tab(lua_State* L)
     dlg->wipTab = new app::script::Tabs(ui::CENTER);
   }
 
-  auto tabContent = new ui::Grid(2, false);
-  tabContent->setExpansive(true);
-  tabContent->setVisible(false);
-  tabContent->setText(text);
-  tabContent->setId(id.c_str());
-  auto tabBtn = dlg->wipTab->addTab(tabContent);
-  dlg->currentGrid = tabContent;
+  auto tab = dlg->wipTab->addTab(id, text);
+  dlg->currentGrid = tab->content();
 
-  if (hasId) dlg->dataWidgets[id] = tabBtn;
+  if (hasId) dlg->dataWidgets[id] = tab;
 
   if (lua_istable(L, 2)) {
     int type = lua_getfield(L, 2, "onclick");
     if (type == LUA_TFUNCTION) {
-      Dialog_connect_signal(L, 1, tabBtn->Click,
+      Dialog_connect_signal(L, 1, tab->Click,
         [id](lua_State* L){
           lua_pushstring(L, id.c_str());
           lua_setfield(L, -2, "tab");
         });
     }
 
-    set_widget_flags(L, 2, tabBtn);
+    set_widget_flags(L, 2, tab);
   }
 
   lua_pushvalue(L, 1);
@@ -1836,9 +1832,10 @@ int Dialog_set_data(lua_State* L)
 int Dialog_get_bounds(lua_State* L)
 {
   auto dlg = get_obj<Dialog>(L, 1);
-  if (!dlg->window.isVisible())
+  if (!dlg->window.isVisible() && dlg->window.bounds().isEmpty()) {
     dlg->window.remapWindow();
-
+    dlg->window.centerWindow(dlg->parentDisplay());
+  }
   push_new<gfx::Rect>(L, dlg->getWindowBounds());
   return 1;
 }
@@ -1848,8 +1845,10 @@ int Dialog_set_bounds(lua_State* L)
   auto dlg = get_obj<Dialog>(L, 1);
   const auto rc = get_obj<gfx::Rect>(L, 2);
   if (rc) {
-    if (*rc != dlg->getWindowBounds())
+    if (*rc != dlg->getWindowBounds()) {
       dlg->setWindowBounds(*rc);
+      dlg->window.setAutoRemap(false);
+    }
   }
   return 0;
 }
